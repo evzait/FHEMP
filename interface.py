@@ -1,5 +1,5 @@
 from .core import (
-    generate_k_vector, generate_K_poly, generate_evaluation_key, generate_M_matrix,
+    generate_k_vector, generate_k_poly, generate_evaluation_key, generate_m_matrix,
     encrypt_message, decrypt_ciphertext,
     add_ciphertexts, multiply_ciphertexts,
     save_json, load_json, matrix_list_to_numpy, matrix_to_numpy
@@ -10,76 +10,79 @@ DEFAULT_DATA_DIR = os.path.abspath("FHEMP_data")
 DEFAULT_KEY_DIR = os.path.join(DEFAULT_DATA_DIR, "key")
 DEFAULT_CIPHER_DIR = os.path.join(DEFAULT_DATA_DIR, "cipher")
 
+json_end = ".json"
+
 def ensure_directories():
     os.makedirs(DEFAULT_KEY_DIR, exist_ok=True)
     os.makedirs(DEFAULT_CIPHER_DIR, exist_ok=True)
 
-def generate_keys(N, p, lam, omega, delta, sk_name = "sk", k_name = "vec", evk_name = "evk", save_dir = DEFAULT_KEY_DIR):
+def generate_keys(n, p, lam, omega, delta, sk_name = "sk", k_name = "vec", evk_name = "evk", save_dir = DEFAULT_KEY_DIR):
     ensure_directories()
-    if not sk_name.endswith(".json"):
-        sk_name += ".json"
-    if not k_name.endswith(".json"):
-        k_name += ".json"
-    if not evk_name.endswith(".json"):
-        evk_name += ".json"
 
-    K_poly = generate_K_poly(N, p, lam, omega)
-    k_vec = generate_k_vector(N, p)
-    evk = generate_evaluation_key(K_poly, N, p, delta, lam)
+    if not sk_name.endswith(json_end):
+        sk_name += json_end
+    if not k_name.endswith(json_end):
+        k_name += json_end
+    if not evk_name.endswith(json_end):
+        evk_name += json_end
 
-    save_json(K_poly, os.path.join(save_dir, sk_name))
+    k_poly = generate_k_poly(n, p, lam, omega)
+    k_vec = generate_k_vector(n, p)
+    evk = generate_evaluation_key(k_poly, n, p, delta, lam)
+
+    save_json(k_poly, os.path.join(save_dir, sk_name))
     save_json(k_vec, os.path.join(save_dir, k_name))
     save_json(evk, os.path.join(save_dir, evk_name))
 
     return True
 
-def encrypt(message, filename, N, p, lam, psi, secret_key_file, vector_file):
+def encrypt(message, filename, n, p, lam, psi, secret_key_file, vector_file):
     ensure_directories()
-    if not filename.endswith(".json"):
-        filename += ".json"
-    if not secret_key_file.endswith(".json"):
-        secret_key_file += ".json"
-    if not vector_file.endswith(".json"):
-        vector_file += ".json"
+    if not filename.endswith(json_end):
+        filename += json_end
+    if not secret_key_file.endswith(json_end):
+        secret_key_file += json_end
+    if not vector_file.endswith(json_end):
+        vector_file += json_end
 
     secret_key_file = os.path.join(DEFAULT_KEY_DIR, secret_key_file)
     vector_file = os.path.join(DEFAULT_KEY_DIR, vector_file)
 
-    K_poly = matrix_list_to_numpy(load_json(secret_key_file))
+    k_poly = matrix_list_to_numpy(load_json(secret_key_file))
     k_vec = matrix_to_numpy(load_json(vector_file))
 
-    M = generate_M_matrix(K_poly, k_vec, message, p)
+    M = generate_m_matrix(k_poly, k_vec, message, p)
 
-    ciphertext = encrypt_message(K_poly, M, N, p, lam, psi)
+    ciphertext = encrypt_message(k_poly, M, n, p, lam, psi)
     save_json(ciphertext, os.path.join(DEFAULT_CIPHER_DIR, filename))
     return ciphertext
 
 def decrypt(ciphertext_file, secret_key_file, vector_file, p):
-    if not ciphertext_file.endswith(".json"):
-        ciphertext_file += ".json"
-    if not secret_key_file.endswith(".json"):
-        secret_key_file += ".json"
-    if not vector_file.endswith(".json"):
-        vector_file += ".json"
+    if not ciphertext_file.endswith(json_end):
+        ciphertext_file += json_end
+    if not secret_key_file.endswith(json_end):
+        secret_key_file += json_end
+    if not vector_file.endswith(json_end):
+        vector_file += json_end
 
     ciphertext_file = os.path.join(DEFAULT_CIPHER_DIR, ciphertext_file)
     secret_key_file = os.path.join(DEFAULT_KEY_DIR, secret_key_file)
     vector_file = os.path.join(DEFAULT_KEY_DIR, vector_file)
 
-    C_poly = matrix_list_to_numpy(load_json(ciphertext_file))
-    K_poly = matrix_list_to_numpy(load_json(secret_key_file))
+    c_poly = matrix_list_to_numpy(load_json(ciphertext_file))
+    k_poly = matrix_list_to_numpy(load_json(secret_key_file))
     k_vec = matrix_to_numpy(load_json(vector_file))
 
-    result = decrypt_ciphertext(C_poly, K_poly, k_vec, p)
+    result = decrypt_ciphertext(c_poly, k_poly, k_vec, p)
     return result
 
 def operate_add(ciphertext_file1, ciphertext_file2, p, filename):
-    if not ciphertext_file1.endswith(".json"):
-        ciphertext_file1 += ".json"
-    if not ciphertext_file2.endswith(".json"):
-        ciphertext_file2 += ".json"
-    if not filename.endswith(".json"):
-        filename += ".json"
+    if not ciphertext_file1.endswith(json_end):
+        ciphertext_file1 += json_end
+    if not ciphertext_file2.endswith(json_end):
+        ciphertext_file2 += json_end
+    if not filename.endswith(json_end):
+        filename += json_end
 
     ciphertext_file1 = os.path.join(DEFAULT_CIPHER_DIR, ciphertext_file1)
     C1 = matrix_list_to_numpy(load_json(ciphertext_file1))
@@ -93,14 +96,14 @@ def operate_add(ciphertext_file1, ciphertext_file2, p, filename):
     return result
 
 def operate_multi(ciphertext_file1, ciphertext_file2, p, name_evaluation_key_file, filename):
-    if not ciphertext_file1.endswith(".json"):
-        ciphertext_file1 += ".json"
-    if not ciphertext_file2.endswith(".json"):
-        ciphertext_file2 += ".json"
-    if not filename.endswith(".json"):
-        filename += ".json"
-    if not name_evaluation_key_file.endswith(".json"):
-        name_evaluation_key_file += ".json"
+    if not ciphertext_file1.endswith(json_end):
+        ciphertext_file1 += json_end
+    if not ciphertext_file2.endswith(json_end):
+        ciphertext_file2 += json_end
+    if not filename.endswith(json_end):
+        filename += json_end
+    if not name_evaluation_key_file.endswith(json_end):
+        name_evaluation_key_file += json_end
 
     ciphertext_file1 = os.path.join(DEFAULT_CIPHER_DIR, ciphertext_file1)
     C1 = matrix_list_to_numpy(load_json(ciphertext_file1))
@@ -117,4 +120,4 @@ def operate_multi(ciphertext_file1, ciphertext_file2, p, name_evaluation_key_fil
     return result
 
 
-generate_keys(5,65537, 3,3,3,"sk", "kvec", "evk")
+generate_keys(5, 65537, 3, 3, 3, "sk", "kvec", "evk")

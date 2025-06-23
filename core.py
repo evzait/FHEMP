@@ -5,7 +5,7 @@ import time
 
 
 # ====== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КРИПТОГРАФИЧЕСКИ СТОЙКОЙ ГЕНЕРАЦИИ ======
-def generate_random(p):
+def _generate_secure_random_int(p):
     if p <= 0:
         raise ValueError("Верхняя граница диапазона должна быть положительной.")
     byte_length = (p.bit_length() + 7) // 8
@@ -16,25 +16,25 @@ def generate_random(p):
         if random_int < max_valid_val:
             return random_int % p
 
-def generate_random_matrix(N, p):
-    flat_size = N * N
-    matrix_flat = np.array([generate_random(p) for _ in range(flat_size)], dtype=int)
-    return matrix_flat.reshape((N, N))
+def _generate_secure_random_matrix(n, p):
+    flat_size = n * n
+    matrix_flat = np.array([_generate_secure_random_int(p) for _ in range(flat_size)], dtype=int)
+    return matrix_flat.reshape((n, n))
 
-def generate_random_vector(N, p):
-    return np.array([generate_random(p) for _ in range(N)], dtype=int)
+def _generate_secure_random_vector(n, p):
+    return np.array([_generate_secure_random_int(p) for _ in range(n)], dtype=int)
 
 
 # ====== ГЛАВА 1: ГЕНЕРАЦИЯ СЕКРЕТНОГО КЛЮЧА ======
-def generate_K_poly(N, p, lam, omega):
+def generate_k_poly(n, p, lam, omega):
     degree = omega * lam
-    K_poly = [generate_random_matrix(N, p) for _ in range(degree)]
-    K_poly.append(np.identity(N, dtype=int))
-    return K_poly
+    k_poly = [_generate_secure_random_matrix(n, p) for _ in range(degree)]
+    k_poly.append(np.identity(n, dtype=int))
+    return k_poly
 
-def generate_k_vector(N, p):
+def generate_k_vector(n, p):
     while True:
-        k_vec = generate_random_vector(N, p)
+        k_vec = _generate_secure_random_vector(n, p)
         if np.any(k_vec != 0):
             has_invertible = False
             for element in k_vec:
@@ -49,48 +49,48 @@ def generate_k_vector(N, p):
                 return k_vec
 
 # ====== ГЛАВА 2: КЛЮЧ ВЫЧИСЛЕНИЯ ======
-def generate_random_matrix_poly(delta, lam, N, p):
+def generate_random_matrix_poly(delta, lam, n, p):
     degree = delta * lam
-    R_poly = [generate_random_matrix(N, p) for _ in range(degree + 1)]
-    return R_poly
+    r_poly = [_generate_secure_random_matrix(n, p) for _ in range(degree + 1)]
+    return r_poly
 
-def multiply_matrix_polynominals(A, B, p):
-    if not A or not B:
+def multiply_matrix_polynominals(a, b, p):
+    if not a or not b:
         return []
-    deg_A, deg_B = len(A) - 1, len(B) - 1
-    N_A_rows, N_A_cols = A[0].shape if A else (0, 0)
-    N_B_rows, N_B_cols = B[0].shape if B else (0, 0)
+    deg_a, deg_b = len(a) - 1, len(b) - 1
+    n_a_rows, n_a_cols = a[0].shape if a else (0, 0)
+    n_b_rows, n_b_cols = b[0].shape if b else (0, 0)
 
-    if N_A_cols != N_B_rows:
+    if n_a_cols != n_b_rows:
         raise ValueError("Матричные полиномы несовместимы для умножения.")
 
-    result_rows, result_cols = N_A_rows, N_B_cols
-    result = [np.zeros((result_rows, result_cols), dtype=int) for _ in range(deg_A + deg_B + 1)]
+    result_rows, result_cols = n_a_rows, n_b_cols
+    result = [np.zeros((result_rows, result_cols), dtype=int) for _ in range(deg_a + deg_b + 1)]
 
-    for i in range(deg_A + 1):
-        for j in range(deg_B + 1):
-            result[i + j] = (result[i + j] + A[i] @ B[j]) % p
+    for i in range(deg_a + 1):
+        for j in range(deg_b + 1):
+            result[i + j] = (result[i + j] + a[i] @ b[j]) % p
     while len(result) > 1 and np.all(result[-1] == 0):
         result.pop()
     return result
 
-def generate_evaluation_key(K_poly, N, p, delta, lam):
-    R_poly = generate_random_matrix_poly(delta, lam, N, p)
-    evk = multiply_matrix_polynominals(R_poly, K_poly, p)
+def generate_evaluation_key(k_poly, n, p, delta, lam):
+    r_poly = generate_random_matrix_poly(delta, lam, n, p)
+    evk = multiply_matrix_polynominals(r_poly, k_poly, p)
     return evk
 
 
 # ====== ГЛАВА 3: ШИФРОВАНИЕ ======
-def commutes_with_poly(M, K_poly, p):
-    return all(np.array_equal((M @ Ki) % p, (Ki @ M) % p) for Ki in K_poly)
+def commutes_with_poly(m, k_poly, p):
+    return all(np.array_equal((m @ Ki) % p, (Ki @ m) % p) for Ki in k_poly)
 
-def is_eigenvector(M, k, m, p):
+def is_eigenvector(mat, k, m, p):
     k_col = k.reshape(-1, 1)
-    Mk = (M @ k_col) % p
+    mat_k = (mat @ k_col) % p
     mk = (m * k_col) % p
-    return np.array_equal(Mk, mk)
+    return np.array_equal(mat_k, mk)
 
-def generate_M_matrix(K_poly, k, m, p):
+def generate_m_matrix(k_poly, k, m, p):
     N = k.shape[0]
     identity = np.identity(N, dtype=int)
     base = m * identity % p
@@ -98,65 +98,75 @@ def generate_M_matrix(K_poly, k, m, p):
     total_elements = N * N
     attempt = 0
     while True:
-        B_flat = []
+        b_flat = []
         remainder = attempt
         for _ in range(total_elements):
-            B_flat.append(remainder % p)
+            b_flat.append(remainder % p)
             remainder //= p
-        B = np.array(B_flat).reshape(N, N)
+        B = np.array(b_flat).reshape(N, N)
 
         M = (base + B) % p
         i = i + 1
 
-        if commutes_with_poly(M, K_poly, p) and is_eigenvector(M, k, m, p):
+        if commutes_with_poly(M, k_poly, p) and is_eigenvector(M, k, m, p):
             return M
 
-def generate_R_poly(N, p, lam, psi):
+def generate_r_poly(n, p, lam, psi):
     degree = psi * lam
-    R_poly = [generate_random_matrix(N, p) for _ in range(degree + 1)]
-    return R_poly
+    r_poly = [_generate_secure_random_matrix(n, p) for _ in range(degree + 1)]
+    return r_poly
 
-def encrypt_message(K_poly, M, N, p, lam, psi):
-    R_poly = generate_R_poly(N, p, lam, psi)
-    RK = multiply_matrix_polynominals(R_poly, K_poly, p)
-    RK[0] = (RK[0] + M) % p
+def encrypt_message(k_poly, m, n, p, lam, psi):
+    start_time = time.time()
+
+    r_poly = generate_r_poly(n, p, lam, psi)
+    RK = multiply_matrix_polynominals(r_poly, k_poly, p)
+    if not RK:
+        RK = [np.zeros_like(m)]
+    if len(RK) == 0:
+        RK.append(np.zeros_like(m))
+    RK[0] = (RK[0] + m) % p
     while len(RK) > 1 and np.all(RK[-1] == 0):
         RK.pop()
+
+    end_time = time.time()
+    print(f"[*] Шифрование выполнено за {end_time - start_time:.6f} секунд.")
+
     return RK
 
 
 # ====== ГЛАВА 4: ОПЕРАЦИИ ======
-def add_ciphertexts(C1, C2, p):
+def add_ciphertexts(c1, c2, p):
     start_time = time.time()
-    len1, len2 = len(C1), len(C2)
+    len1, len2 = len(c1), len(c2)
     max_len = max(len1, len2)
-    if C1 and len(C1[0].shape) == 2:
-        N = C1[0].shape[0]
-    elif C2 and len(C2[0].shape) == 2:
-        N = C2[0].shape[0]
-    elif C1 or C2:
+    if c1 and len(c1[0].shape) == 2:
+        N = c1[0].shape[0]
+    elif c2 and len(c2[0].shape) == 2:
+        N = c2[0].shape[0]
+    elif c1 or c2:
         raise ValueError("Некорректный формат шифртекста")
     else:
         return []
     result = []
     for i in range(max_len):
-        A = C1[i] if i < len1 else np.zeros((N, N), dtype=int)
-        B = C2[i] if i < len2 else np.zeros((N, N), dtype=int)
+        A = c1[i] if i < len1 else np.zeros((N, N), dtype=int)
+        B = c2[i] if i < len2 else np.zeros((N, N), dtype=int)
         result.append((A + B) % p)
     while len(result) > 1 and np.all(result[-1] == 0):
         result.pop()
     end_time = time.time()
-    #print(f"[*] Гомоморфное сложение выполнено за {end_time - start_time:.6f} секунд.")
+    print(f"[*] Гомоморфное сложение выполнено за {end_time - start_time:.6f} секунд.")
     return result
 
-def multiply_ciphertexts(C1, C2, evk, p):
+def multiply_ciphertexts(c1, c2, evk, p):
     start_time=time.time()
 
-    multi = multiply_matrix_polynominals(C1, C2, p)
+    multi = multiply_matrix_polynominals(c1, c2, p)
     multi = poly_divmod(multi, evk, p)
 
     end_time = time.time()
-    #print(f"[*] Гомоморфное умножение выполнено за {end_time - start_time:.6f} секунда")
+    print(f"[*] Гомоморфное умножение выполнено за {end_time - start_time:.6f} секунда")
     return multi
 
 
@@ -184,7 +194,6 @@ def poly_divmod(dividend_poly, divisor_poly, p):
             if idx_to_subtract < len(remainder):
                 product = (term_coeff @ divisor_poly[i]) % p
                 remainder[idx_to_subtract] = (remainder[idx_to_subtract] - product) % p
-
         if len(remainder) > 1 and np.all(remainder[-1] == 0):
             remainder.pop()
         if not remainder:
@@ -197,23 +206,24 @@ def poly_divmod(dividend_poly, divisor_poly, p):
         remainder = [zero_matrix.copy()]
     return remainder
 
-def decrypt_ciphertext(C_poly, K_poly, k, p):
-    if not C_poly:
+def decrypt_ciphertext(c_poly, k_poly, k, p):
+    start_time = time.time()
+    if not c_poly:
         raise ValueError("Нельзя расшифровать пустой шифртекст")
-    if not K_poly:
+    if not k_poly:
         raise ValueError("Секретный полином K(X) не может быть пустым")
     N = k.shape[0]
-    if C_poly[0].shape != (N, N):
-        raise ValueError(f"Размер матрицы C0 {C_poly[0].shape} не соответствует N={N}")
-    if K_poly[0].shape != (N, N):
-        raise ValueError(f"Размер матрицы K0 {K_poly[0].shape} не соответствует N={N}")
+    if c_poly[0].shape != (N, N):
+        raise ValueError(f"Размер матрицы C0 {c_poly[0].shape} не соответствует N={N}")
+    if k_poly[0].shape != (N, N):
+        raise ValueError(f"Размер матрицы K0 {k_poly[0].shape} не соответствует N={N}")
     try:
-        M_poly = poly_divmod(C_poly, K_poly, p)
+        m_poly = poly_divmod(c_poly, k_poly, p)
     except Exception as e:
         raise ValueError(f"Ошибка при делении полиномов: {e}")
-    if not M_poly:
+    if not m_poly:
         raise ValueError("Результат деления полиномов пуст.")
-    M0 = M_poly[0]
+    M0 = m_poly[0]
 
     k_col = k.reshape(-1, 1)
     y = (M0 @ k_col) % p
@@ -233,13 +243,30 @@ def decrypt_ciphertext(C_poly, K_poly, k, p):
         raise ValueError("Невозможно расшифровать: нет обратимых элементов в векторе k")
 
     end_time = time.time()
-    #print(f"[*] Расшифровка выполнена за {end_time - start_time:.6f} секунд.")
+    print(f"[*] Расшифровка выполнена за {end_time - start_time:.6f} секунд.")
 
     return decrypted_message
 
 # === ГЛАВА 5. Сохранение и загрузка ===
 def save_json(data, filename):
     def convert_to_list(item):
+        if isinstance(item, np.ndarray):
+            return item.tolist()
+        if isinstance(item, (list, tuple)):
+            return [convert_to_list(sub_item) for sub_item in item]
+        if isinstance(item, dict):
+            return {key: convert_to_list(value) for key, value in item.items()}
+        if isinstance(item, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64,
+                             np.uint8, np.uint16, np.uint32, np.uint64)):
+            return int(item)
+        if isinstance(item, (np.float_, np.float16, np.float32, np.float64)):
+            return float(item)
+        if isinstance(item, (np.complex_, np.complex64, np.complex128)):
+            return {'real': item.real, 'imag': item.imag}
+        if isinstance(item, np.bool_):
+            return bool(item)
+        if isinstance(item, np.void):
+            return None
         return item
 
     serializable_data = convert_to_list(data)
